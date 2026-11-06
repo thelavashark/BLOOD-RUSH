@@ -15,14 +15,15 @@ canvas{position:fixed;inset:0;width:100%;height:100%;image-rendering:pixelated;i
 #menu{position:fixed;inset:0;background:rgba(0,0,0,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;cursor:pointer}
 #menu h1{font-size:min(11vw,84px);margin:0;letter-spacing:.12em;text-shadow:3px 3px 0 #500,-2px 0 #f80}
 #menu p{max-width:500px;color:#c88;line-height:1.5;margin:6px 16px}
+#tm{position:fixed;top:14px;right:18px;text-align:right;font-size:30px;letter-spacing:2px;text-shadow:0 0 8px #f00;pointer-events:none}#tm small{font-size:16px;color:#c88}
 </style></head><body>
 <canvas id="c"></canvas><div id="vig"></div><div id="fear"></div><div id="flash"></div>
 <div id="hud"><div id="sg"></div><div id="dash"><i></i></div></div>
-<div id="msg"></div><div id="pr"></div>
+<div id="tm">0:00.00</div><div id="msg"></div><div id="pr"></div>
 <div id="menu"><h1>HOLLOW ASCENT</h1>
 <p>Four ruins above a sea of blood. Collect the sigils, break every seal, reach the gate.</p>
 <p>The Hollow only moves while you are not looking. It does not stay far away for long.</p>
-<p>WASD move · SPACE jump (twice) · SHIFT dash · E interact · MOUSE look</p>
+<p>WASD move · SPACE jump (twice) · SHIFT dash · E interact · R restart run · MOUSE look</p>
 <p id="go">CLICK TO ENTER</p></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
@@ -60,8 +61,9 @@ hb(.55,1,.45,pa,0,1.9,0);hb(.15,.34,.05,bl,-.15,2.05,.24);hb(.15,.34,.05,bl,.15,
 E.scale.setScalar(1.25);scene.add(E);
 // ---------- state
 const pl={p:new THREE.Vector3(),v:new THREE.Vector3(),yaw:0,pitch:0,ground:0,jumps:0,dash:0,dcd:0};
-let LV,P,PL,IA,sig,gate,D,lvl=0,cp=0,got=0,solved=0,tot=0,open={},keys={},playing=0,won=0,dead=0,ld=0,t0=0,heart=0,unseen=0,AC,nz,bass;
+let run=0,splits=[],LV,P,PL,IA,sig,gate,D,lvl=0,cp=0,got=0,solved=0,tot=0,open={},keys={},playing=0,won=0,dead=0,ld=0,t0=0,heart=0,unseen=0,AC,nz,bass;
 const fw=new THREE.Vector3(),rt=new THREE.Vector3(),tmp=new THREE.Vector3();
+const fmt=t=>(t/60|0)+":"+(t%60).toFixed(2).padStart(5,"0");
 function say(t,ms=2600){const m=$('msg');m.textContent=t;m.style.opacity=1;clearTimeout(say.h);say.h=setTimeout(()=>m.style.opacity=0,ms)}
 function hud(){$('sg').textContent=`LEVEL ${lvl+1}  SIGILS ${got}/${D.need}  SEALS ${solved}/${tot}`;gate.material.color.set(got>=D.need&&solved>=tot?0xff2200:0x330000)}
 function beep(f,d,v=.2,ty='sine'){if(!AC)return;const o=AC.createOscillator(),g=AC.createGain();o.type=ty;o.frequency.value=f;g.gain.value=v;g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+d);o.connect(g).connect(AC.destination);o.start();o.stop(AC.currentTime+d)}
@@ -100,14 +102,16 @@ function die(){if(dead)return;dead=1;const f=$('flash');f.style.transition='none
 addEventListener('keydown',e=>{keys[e.code]=1;if(!playing)return;
  if(e.code==='Space'&&pl.jumps<2){pl.v.y=9.5;pl.jumps++;pl.ground=0;beep(200,.12,.1,'square')}
  if(e.code.startsWith('Shift')&&pl.dcd<=0){pl.dash=.18;pl.dcd=.9;beep(90,.2,.2,'sawtooth')}
- if(e.code==='KeyE'){const o=nearIA();o&&o.fn()}});
+ if(e.code==='KeyE'){const o=nearIA();o&&o.fn()}
+ if(e.code==='KeyR'){run=0;splits=[];load(0);say('RUN RESTARTED',1500)}});
 addEventListener('keyup',e=>keys[e.code]=0);
 addEventListener('mousemove',e=>{if(!playing)return;pl.yaw-=e.movementX*.0022;pl.pitch=Math.max(-1.5,Math.min(1.5,pl.pitch-e.movementY*.0022))});
 $('menu').onclick=()=>{initAudio();cv.requestPointerLock()};
-document.addEventListener('pointerlockchange',()=>{playing=document.pointerLockElement===cv&&!won;$('menu').style.display=playing||won?'none':'flex';$('go').textContent='PAUSED. CLICK TO RETURN'});
+document.addEventListener('pointerlockchange',()=>{playing=document.pointerLockElement===cv&&!won;$('menu').style.display=playing?'none':'flex';if($('go'))$('go').textContent='PAUSED. CLICK TO RETURN'});
 load(0);
 let last=performance.now();
 function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-last)/1000);last=now;t0+=dt;let fear=0;
+ if(playing&&!won){run+=dt;$('tm').innerHTML=fmt(run)+'<br><small>LEVEL '+fmt(run-(splits[splits.length-1]||0))+'</small>'}
  if(playing&&!dead&&!ld){
   const inx=(keys.KeyD?1:0)-(keys.KeyA?1:0),inz=(keys.KeyS?1:0)-(keys.KeyW?1:0);
   fw.set(-Math.sin(pl.yaw),0,-Math.cos(pl.yaw));rt.set(Math.cos(pl.yaw),0,-Math.sin(pl.yaw));
@@ -119,8 +123,9 @@ function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-last)/
   if(pl.p.y<-12)die();
   sig.forEach(s=>{if(s.visible&&s.position.distanceTo(pl.p)<2.2){s.visible=false;got++;beep(660,.4,.2,'triangle');hud();say('SIGIL '+got+'/'+D.need,1500)}});
   if(pl.p.distanceTo(gate.position)<3.4){if(got<D.need)say('THE GATE NEEDS '+D.need+' SIGILS',1200);else if(solved<tot)say('THE GATE IS SEALED. SOMETHING IS UNSOLVED.',1500);
-   else if(lvl==3){won=1;document.exitPointerLock();$('menu').style.display='flex';$('menu').innerHTML='<h1>ESCAPED</h1><p>It is still behind you.</p><p onclick="location.reload()">CLICK TO DESCEND AGAIN</p>'}
-   else{ld=1;say('THE GATE OPENS...',900);setTimeout(()=>{load(lvl+1);ld=0},900)}}
+   else if(lvl==3){won=1;splits.push(run);document.exitPointerLock();let b=run;try{const o=+localStorage.getItem('ha_best');if(o&&o<run)b=o;else localStorage.setItem('ha_best',run)}catch(e){}
+   $('menu').style.display='flex';$('menu').innerHTML='<h1>ESCAPED</h1><p>TIME '+fmt(run)+'</p><p>'+splits.map((t,i)=>'L'+(i+1)+' '+fmt(t-(splits[i-1]||0))).join(' · ')+'</p><p>BEST '+fmt(b)+'</p><p onclick="location.reload()">CLICK TO RUN IT AGAIN</p>'}
+   else{ld=1;splits.push(run);say('SPLIT '+fmt(run),1400);setTimeout(()=>{load(lvl+1);ld=0},900)}}
   // the Hollow
   const eyeP=pl.p.clone();eyeP.y+=1.6;const to=E.position.clone().sub(eyeP),dist=to.length();to.normalize();
   cam.getWorldDirection(tmp);const seen=tmp.dot(to)>.5&&dist<70;
