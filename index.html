@@ -1,286 +1,142 @@
 <!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>BLOOD//RUSH</title>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HOLLOW ASCENT</title>
 <style>
-*{box-sizing:border-box}
-body{margin:0;background:#08070b;color:white;font-family:monospace;overflow:hidden}
-canvas{width:100vw;height:100vh;display:block;image-rendering:pixelated}
-#hud{position:absolute;top:15px;left:20px;font-size:20px;color:#ff344b;text-shadow:2px 2px black;pointer-events:none}
-#health{position:absolute;bottom:20px;left:20px;font-size:25px;color:#ff344b;pointer-events:none}
-#weapon{position:absolute;bottom:20px;right:20px;font-size:20px;pointer-events:none}
-#menu{position:absolute;inset:0;background:#09070bf2;display:flex;align-items:center;justify-content:center;text-align:center;z-index:5}
-#menu h1{font-size:65px;color:#ff263f;margin:0}
-#menu button{padding:16px 35px;background:#d21f36;color:white;border:0;font-size:20px;cursor:pointer;font-family:monospace}
-#menu p{color:#aaa;line-height:1.7}
-</style>
-</head>
-<body>
-
-<div id="menu">
- <div>
-  <h1>BLOOD//RUSH</h1>
-  <p>KILL FAST. STAY ALIVE.<br><br>
-  WASD - MOVE<br>
-  MOUSE - AIM<br>
-  LEFT CLICK - SHOOT<br>
-  SPACE - DASH<br>
-  1 / 2 - SWITCH WEAPON</p>
-  <button onclick="start()">ENTER THE SLAUGHTER</button>
- </div>
-</div>
-
-<div id="hud">WAVE <span id="wave">1</span><br>
-DEMONS <span id="left">0</span><br>
-STYLE <span id="style">NONE</span></div>
-<div id="health">♥ <span id="hp">100</span></div>
-<div id="weapon">REVOLVER</div>
-<canvas id="game"></canvas>
-
+html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Courier New",monospace;color:#ff2a1a}
+canvas{position:fixed;inset:0;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges}
+#vig{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,.85)),repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0 1px,transparent 1px 3px)}
+#fear{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,transparent 30%,rgba(160,0,0,.8))}
+#flash{position:fixed;inset:0;background:#900;opacity:0;pointer-events:none}
+#hud{position:fixed;left:16px;bottom:16px;font-size:17px;letter-spacing:2px;text-shadow:0 0 6px #f00;pointer-events:none}
+#dash{width:120px;height:8px;border:1px solid #f22;margin-top:6px}#dash i{display:block;height:100%;background:#f22;width:100%}
+#msg,#pr{position:fixed;width:100%;text-align:center;font-size:20px;text-shadow:0 0 8px #f00;pointer-events:none}
+#msg{top:12%;opacity:0;transition:opacity .4s}#pr{bottom:30%;font-size:17px;color:#fff}
+#menu{position:fixed;inset:0;background:rgba(0,0,0,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;cursor:pointer}
+#menu h1{font-size:min(11vw,84px);margin:0;letter-spacing:.12em;text-shadow:3px 3px 0 #500,-2px 0 #f80}
+#menu p{max-width:500px;color:#c88;line-height:1.5;margin:6px 16px}
+</style></head><body>
+<canvas id="c"></canvas><div id="vig"></div><div id="fear"></div><div id="flash"></div>
+<div id="hud"><div id="sg"></div><div id="dash"><i></i></div></div>
+<div id="msg"></div><div id="pr"></div>
+<div id="menu"><h1>HOLLOW ASCENT</h1>
+<p>Four ruins above a sea of blood. Collect the sigils, break every seal, reach the gate.</p>
+<p>The Hollow only moves while you are not looking. It does not stay far away for long.</p>
+<p>WASD move · SPACE jump (twice) · SHIFT dash · E interact · MOUSE look</p>
+<p id="go">CLICK TO ENTER</p></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
-const canvas=document.getElementById("game");
-const ctx=canvas.getContext("2d");
-
-canvas.width=640;
-canvas.height=400;
-
-const map=[
-"################",
-"#..............#",
-"#..............#",
-"#..##.....##...#",
-"#..............#",
-"#.....#........#",
-"#.....#........#",
-"#..............#",
-"#...#......#...#",
-"#...#......#...#",
-"#..............#",
-"#......##......#",
-"#..............#",
-"#..............#",
-"#..............#",
-"################"
-];
-
-let player={x:8,y:8,a:0,hp:100,dash:0,weapon:0};
-let enemies=[];
-let keys={};
-let bullets=[];
-let wave=1,kills=0,combo=0;
-let running=false;
-let ammo=6;
-let last=0;
-
-function start(){
- document.getElementById("menu").style.display="none";
- player={x:8,y:8,a:0,hp:100,dash:0,weapon:0};
- wave=1;kills=0;combo=0;ammo=6;
- enemies=[];
- spawn();
- running=true;
- canvas.requestPointerLock();
- requestAnimationFrame(loop);
-}
-
-function spawn(){
- for(let i=0;i<3+wave*2;i++){
-  let x,y;
-  do{
-   x=2+Math.random()*12;
-   y=2+Math.random()*12;
-  }while(wall(x,y)||Math.hypot(x-player.x,y-player.y)<4);
-  enemies.push({x,y,hp:70,attack:0});
- }
- updateHUD();
-}
-
-function wall(x,y){
- return !map[Math.floor(y)] ||
- map[Math.floor(y)][Math.floor(x)]!=="." ;
-}
-
-document.addEventListener("keydown",e=>{
- keys[e.code]=true;
- if(e.code==="Space")player.dash=.25;
- if(e.code==="Digit1"){player.weapon=0;ammo=6;}
- if(e.code==="Digit2"){player.weapon=1;ammo=4;}
- if(e.code==="KeyR")ammo=player.weapon===0?6:4;
-});
-
-document.addEventListener("keyup",e=>keys[e.code]=false);
-
-document.addEventListener("mousemove",e=>{
- if(document.pointerLockElement===canvas)
- player.a+=e.movementX*.003;
-});
-
-canvas.addEventListener("click",()=>{
- if(!running)return;
- if(!document.pointerLockElement)canvas.requestPointerLock();
- else shoot();
-});
-
-function shoot(){
- if(ammo<=0)return;
- ammo--;
- let range=player.weapon===0?14:9;
- let angle=player.a;
- let best=null,dist=range;
-
- for(let e of enemies){
-  let dx=e.x-player.x,dy=e.y-player.y;
-  let d=Math.hypot(dx,dy);
-  let a=Math.atan2(dy,dx);
-  let diff=Math.atan2(Math.sin(a-angle),Math.cos(a-angle));
-  if(Math.abs(diff)<(player.weapon===0?.06:.19)&&d<dist){
-   best=e;dist=d;
-  }
- }
- if(best){
-  best.hp-=player.weapon===0?55:30;
-  if(best.hp<=0){
-   enemies=enemies.filter(e=>e!==best);
-   kills++;combo++;
-   player.hp=Math.min(100,player.hp+12);
-   document.getElementById("style").textContent=
-    combo>=5?"ULTRAKILL":combo>=3?"BRUTAL":"KILL";
-   updateHUD();
-  }
- }
-}
-
-function updateHUD(){
- document.getElementById("hp").textContent=Math.ceil(player.hp);
- document.getElementById("left").textContent=enemies.length;
- document.getElementById("wave").textContent=wave;
- document.getElementById("weapon").textContent=
- player.weapon===0?"REVOLVER ("+ammo+")":"SHOTGUN ("+ammo+")";
-}
-
-function update(dt){
- let speed=player.dash>0?9:3;
- player.dash=Math.max(0,player.dash-dt);
-
- let f=(keys.KeyW?1:0)-(keys.KeyS?1:0);
- let s=(keys.KeyD?1:0)-(keys.KeyA?1:0);
- let dx=(Math.cos(player.a)*f-Math.sin(player.a)*s)*speed*dt;
- let dy=(Math.sin(player.a)*f+Math.cos(player.a)*s)*speed*dt;
-
- if(!wall(player.x+dx,player.y))player.x+=dx;
- if(!wall(player.x,player.y+dy))player.y+=dy;
-
- for(let e of enemies){
-  let dx=player.x-e.x,dy=player.y-e.y;
-  let d=Math.hypot(dx,dy);
-  if(d>.7){
-   let vx=dx/d*dt;
-   let vy=dy/d*dt;
-   if(!wall(e.x+vx,e.y))e.x+=vx;
-   if(!wall(e.x,e.y+vy))e.y+=vy;
-  }else{
-   e.attack-=dt;
-   if(e.attack<=0){
-    player.hp-=10;
-    e.attack=.8;
-    updateHUD();
-   }
-  }
- }
-
- if(player.hp<=0)gameOver();
-
- if(enemies.length===0){
-  wave++;
-  player.hp=Math.min(100,player.hp+20);
-  spawn();
- }
- updateHUD();
-}
-
-function render(){
- const w=canvas.width,h=canvas.height;
- ctx.fillStyle="#160d18";
- ctx.fillRect(0,0,w,h/2);
- ctx.fillStyle="#21151d";
- ctx.fillRect(0,h/2,w,h/2);
-
- let depth=[];
-
- for(let x=0;x<w;x++){
-  let angle=player.a+(x/w-.5)*1.15;
-  let d=0;
-  while(d<20&&!wall(
-   player.x+Math.cos(angle)*d,
-   player.y+Math.sin(angle)*d
-  ))d+=.04;
-
-  let corrected=d*Math.cos(angle-player.a);
-  depth[x]=corrected;
-
-  let height=Math.min(h,h/(corrected+.01)*.8);
-  let shade=Math.max(20,150-corrected*9);
-  ctx.fillStyle=`rgb(shade,{shade*.25},${shade*.35})`;
-  ctx.fillRect(x,h/2-height/2,1,height);
- }
-
- let sprites=enemies.map(e=>{
-  let dx=e.x-player.x,dy=e.y-player.y;
-  let d=Math.hypot(dx,dy);
-  let a=Math.atan2(dy,dx)-player.a;
-  a=Math.atan2(Math.sin(a),Math.cos(a));
-  return {e,d,a};
- }).filter(s=>Math.abs(s.a)<.8).sort((a,b)=>b.d-a.d);
-
- for(let s of sprites){
-  let sx=(.5+s.a/1.15)*w;
-  let size=Math.min(h,h/(s.d+.01)*.65);
-  let top=h/2-size/2;
-  for(let x=Math.max(0,Math.floor(sx-size*.25));x<Math.min(w,sx+size*.25);x++){
-   if(s.d<depth[x]){
-    ctx.fillStyle="#d52b49";
-    ctx.fillRect(x,top,size*.5/Math.max(1,size),size);
-   }
-  }
-  ctx.fillStyle="#fff";
-  ctx.fillRect(sx-size*.12,top+size*.3,5,4);
-  ctx.fillRect(sx+size*.08,top+size*.3,5,4);
- }
-
- // Weapon
- ctx.fillStyle="#333039";
- ctx.fillRect(w*.44,h*.83,w*.12,h*.17);
- ctx.fillStyle="#a7283e";
- ctx.fillRect(w*.48,h*.79,w*.04,h*.1);
-
- // Crosshair
- ctx.strokeStyle="#fff";
- ctx.beginPath();
- ctx.moveTo(w/2-8,h/2);ctx.lineTo(w/2+8,h/2);
- ctx.moveTo(w/2,h/2-8);ctx.lineTo(w/2,h/2+8);
- ctx.stroke();
-}
-
-function gameOver(){
- running=false;
- document.exitPointerLock();
- document.getElementById("menu").style.display="flex";
- document.querySelector("#menu div").innerHTML=
- `<h1>YOU DIED</h1>
- <p>WAVE ${wave}<br>KILLS ${kills}</p>
- <button onclick="start()">TRY AGAIN</button>`;
-}
-
-function loop(t){
- if(!running)return;
- let dt=Math.min((t-last)/1000,.04)||.016;
- last=t;
- update(dt);
- render();
- requestAnimationFrame(loop);
-}
-
-</script>
-</body>
-</html>
+const cv=document.getElementById('c'),$=id=>document.getElementById(id);
+const R=new THREE.WebGLRenderer({canvas:cv,antialias:false});
+const scene=new THREE.Scene();scene.background=new THREE.Color(0x090000);scene.fog=new THREE.FogExp2(0x1a0000,0.036);
+const cam=new THREE.PerspectiveCamera(75,1,.1,200);
+function size(){R.setSize(Math.ceil(innerWidth/4),Math.ceil(innerHeight/4),false);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix()}
+addEventListener('resize',size);size();
+function tex(b){const t=document.createElement('canvas');t.width=t.height=16;const g=t.getContext('2d');
+ for(let x=0;x<16;x++)for(let y=0;y<16;y++){const v=Math.random()*40-20;g.fillStyle=`rgb(${b.map(c=>Math.max(0,c+v))})`;g.fillRect(x,y,1,1)}
+ const T=new THREE.CanvasTexture(t);T.magFilter=T.minFilter=THREE.NearestFilter;T.wrapS=T.wrapT=THREE.RepeatWrapping;return T}
+const stone=new THREE.MeshLambertMaterial({map:tex([90,70,66]),flatShading:true}),trim=new THREE.MeshBasicMaterial({color:0xaa1100});
+scene.add(new THREE.AmbientLight(0x401818,1.2));const lamp=new THREE.PointLight(0xff5533,1.6,28);scene.add(lamp);
+const sea=new THREE.Mesh(new THREE.PlaneGeometry(500,500),new THREE.MeshBasicMaterial({map:tex([110,0,0])}));
+sea.material.map.repeat.set(70,70);sea.rotation.x=-Math.PI/2;scene.add(sea);
+// ---------- levels: [x,top y,z,w,d,checkpoint,hiddenGroup]
+function gen(){let s=77;const r=()=>(s=s*16807%2147483647)/2147483647,P=[[0,0,0,8,8,1]];let x=0,y=0,z=0;
+ for(let i=1;i<22;i++){x=Math.max(-12,Math.min(12,x+(r()-.5)*7));z-=6.5+r();y+=r()<.45?.9:0;P.push([x,y,z,3.2+r(),3.2+r(),i%5==0?1:0,i>10&&i<15?1:0])}
+ P.push([0,y+1,z-8,9,9,1]);P[10][3]=P[10][4]=8;return P}
+const L=[
+{n:'THE DESCENT',fog:0x1a0000,col:0xaa1100,need:3,S:[2,4,6],P:[[0,0,0,8,8,1],[0,0,-10,4,4],[4,1,-17,4,4,1],[-1,2,-24,3,3],[-6,2,-30,4,4,1],[-6,3.5,-37,3,3],[0,4.5,-42,4,4,1],[6,5,-48,3,3],[0,6,-56,7,7,1],[6,7,-63,3,3],[0,8,-70,8,8,1]]},
+{n:'THE LEVER HALLS',fog:0x001a0a,col:0x22cc44,need:3,S:[7,11,12],V:[[2,1],[6,2],[10,3]],P:[[0,0,0,8,8,1],[0,0,-10,4,4],[-6,1,-17,4,4,1],[0,1,-24,5,5,1],[0,1,-30,3,3,0,1],[0,2,-36,3,3,0,1],[0,2,-44,6,6,1],[-7,2,-32,3,3],[7,3,-50,3,3,0,2],[12,4,-55,3,3,0,2],[12,4,-62,5,5,1],[-8,3,-48,3,3],[18.5,5,-60,3,3],[6,5,-68,3,3,0,3],[0,6,-75,3,3,0,3],[0,6,-84,8,8,1]]},
+{n:'THE CHOIR',fog:0x0d001a,col:0x8844ff,need:3,S:[5,6,8],Q:[[0,1,4],[7,2,5]],P:[[0,0,0,10,10,1],[0,0,-11,3,3,0,1],[-4,1,-18,3,3,0,1],[0,2,-25,3,3,0,1],[0,2,-33,5,5,1],[-8,3,-33,3,3],[7,3,-38,3,3],[0,3.5,-44,10,10,1],[-9,4.5,-50,3,3],[0,5,-55,3,3,0,2],[4,6,-62,3,3,0,2],[0,7,-70,3,3,0,2],[0,7,-80,9,9,1]]},
+{n:'THE CROWN OF TEETH',fog:0x140404,col:0xff2200,need:5,S:[3,6,9,16,20],Q:[[10,1,5]]}];
+const pc=[0xff2222,0x2288ff,0x22ff66,0xffcc22],dim=k=>new THREE.Color(pc[k]).multiplyScalar(.3).getHex();
+// ---------- the Hollow
+const E=new THREE.Group(),bl=new THREE.MeshBasicMaterial({color:0x050505}),pa=new THREE.MeshBasicMaterial({color:0xd9d2c3}),rd=new THREE.MeshBasicMaterial({color:0xff1010});
+const bx=(w,h,d,m,x,y,z)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);E.add(o);return o};
+bx(.6,2.6,.35,bl,0,0,0);const head=new THREE.Group();head.position.y=1.9;E.add(head);
+const hb=(w,h,d,m,x,y,z)=>{const o=bx(w,h,d,m,x,y,z);E.remove(o);head.add(o);o.position.y-=1.9};
+hb(.55,1,.45,pa,0,1.9,0);hb(.15,.34,.05,bl,-.15,2.05,.24);hb(.15,.34,.05,bl,.15,2.05,.24);hb(.05,.05,.05,rd,-.15,2.05,.27);hb(.05,.05,.05,rd,.15,2.05,.27);hb(.42,.14,.05,bl,0,1.6,.24);
+[-.15,-.05,.05,.15].forEach(x=>hb(.04,.12,.05,pa,x,1.6,.27));
+[-.55,.55].forEach(x=>bx(.1,2.8,.1,bl,x,-.3,0));[-.85,.85].forEach(x=>bx(.08,3.3,.08,bl,x,-.7,0));
+E.scale.setScalar(1.25);scene.add(E);
+// ---------- state
+const pl={p:new THREE.Vector3(),v:new THREE.Vector3(),yaw:0,pitch:0,ground:0,jumps:0,dash:0,dcd:0};
+let LV,P,PL,IA,sig,gate,D,lvl=0,cp=0,got=0,solved=0,tot=0,open={},keys={},playing=0,won=0,dead=0,ld=0,t0=0,heart=0,unseen=0,AC,nz,bass;
+const fw=new THREE.Vector3(),rt=new THREE.Vector3(),tmp=new THREE.Vector3();
+function say(t,ms=2600){const m=$('msg');m.textContent=t;m.style.opacity=1;clearTimeout(say.h);say.h=setTimeout(()=>m.style.opacity=0,ms)}
+function hud(){$('sg').textContent=`LEVEL ${lvl+1}  SIGILS ${got}/${D.need}  SEALS ${solved}/${tot}`;gate.material.color.set(got>=D.need&&solved>=tot?0xff2200:0x330000)}
+function beep(f,d,v=.2,ty='sine'){if(!AC)return;const o=AC.createOscillator(),g=AC.createGain();o.type=ty;o.frequency.value=f;g.gain.value=v;g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+d);o.connect(g).connect(AC.destination);o.start();o.stop(AC.currentTime+d)}
+function initAudio(){if(AC)return;AC=new (window.AudioContext||window.webkitAudioContext)();
+ const o=AC.createOscillator(),g=AC.createGain(),f=AC.createBiquadFilter();o.type='sawtooth';o.frequency.value=38;f.frequency.value=120;g.gain.value=.12;o.connect(f).connect(g).connect(AC.destination);o.start();bass=o;
+ const b=AC.createBuffer(1,AC.sampleRate,AC.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+ const s=AC.createBufferSource();s.buffer=b;s.loop=true;nz=AC.createGain();nz.gain.value=0;s.connect(nz).connect(AC.destination);s.start()}
+function mkP(p){const[x,y,z,w,d,c,g]=p;const m=new THREE.Mesh(new THREE.BoxGeometry(w,3,d),stone);m.position.set(x,y-1.5,z);
+ const t=new THREE.Mesh(new THREE.BoxGeometry(w+.15,.12,d+.15),trim);t.position.set(x,y-.04,z);
+ const s=new THREE.Mesh(new THREE.ConeGeometry(Math.min(w,d)/2,6,5),stone);s.rotation.x=Math.PI;s.position.set(x,y-6,z);
+ const a=[m,t,s];a.forEach(o=>{o.visible=!g;LV.add(o)});return a}
+function reveal(g){open[g]=1;PL.forEach(e=>{if(e.p[6]==g)e.ms.forEach(o=>o.visible=true)});beep(120,.6,.3,'sawtooth');say('A BRIDGE FORMS')}
+function fl(pu,k){pu.pil[k].material.color.setHex(pc[k]);beep(220+k*130,.35,.15,'triangle');setTimeout(()=>pu.pil[k].material.color.setHex(dim(k)),450)}
+function punish(){fw.set(-Math.sin(pl.yaw),0,-Math.cos(pl.yaw));E.position.copy(pl.p).addScaledVector(fw,-7);E.position.y+=1.5;beep(50,.8,.4,'sawtooth')}
+function spawn(){const c=P[cp];pl.p.set(c[0],c[1]+.5,c[2]);pl.v.set(0,0,0);pl.yaw=0;pl.pitch=0;E.position.set(c[0],c[1]+2,c[2]+18);unseen=0}
+function load(i){lvl=i;D=L[i];if(!D.P)D.P=gen();P=D.P;if(LV)scene.remove(LV);LV=new THREE.Group();scene.add(LV);
+ scene.fog.color.setHex(D.fog);scene.background.setHex(D.fog);trim.color.setHex(D.col);got=0;solved=0;open={};cp=0;IA=[];PL=[];sig=[];
+ P.forEach(p=>PL.push({p,ms:mkP(p)}));
+ const mz=Math.min(...P.map(p=>p[2]))-15,mx=Math.max(...P.map(p=>Math.abs(p[0])))+25;sea.position.set(0,-14,mz/2);
+ for(let k=0;k<45;k++){const m=new THREE.Mesh(new THREE.BoxGeometry(.6+Math.random()*1.5,4+Math.random()*14,.6+Math.random()*1.5),stone);
+  m.position.set((Math.random()-.5)*2*mx,-4+Math.random()*24,15+(mz-15)*Math.random());m.rotation.set(Math.random()*.3,Math.random(),Math.random()*.3);
+  if(P.some(p=>Math.abs(m.position.x-p[0])<7&&Math.abs(m.position.z-p[2])<7))m.position.x+=30;LV.add(m)}
+ D.S.forEach(k=>{const p=P[k],m=new THREE.Mesh(new THREE.OctahedronGeometry(.5),new THREE.MeshBasicMaterial({color:0xff3322}));m.position.set(p[0],p[1]+1.6,p[2]);LV.add(m);sig.push(m)});
+ const gp=P[P.length-1];gate=new THREE.Mesh(new THREE.TorusGeometry(2,.25,6,10),new THREE.MeshBasicMaterial({color:0x330000}));gate.position.set(gp[0],gp[1]+2.4,gp[2]);LV.add(gate);
+ (D.V||[]).forEach(([pi,g])=>{const p=P[pi],m=new THREE.Mesh(new THREE.BoxGeometry(.3,1.3,.3),new THREE.MeshBasicMaterial({color:0xff4422}));m.position.set(p[0]+1,p[1]+.65,p[2]);LV.add(m);
+  const o={pos:m.position.clone(),t:'[E] PULL LEVER',fn(){IA.splice(IA.indexOf(o),1);m.material.color.setHex(0x333333);m.rotation.z=.8;solved++;beep(90,.4,.3,'square');reveal(g);hud()}};IA.push(o)});
+ (D.Q||[]).forEach(([pi,g,n])=>{const c=P[pi],pu={seq:Array.from({length:n},()=>Math.random()*4|0),prog:0,busy:0,pil:[]};
+  const al=new THREE.Mesh(new THREE.BoxGeometry(1.2,.9,1.2),new THREE.MeshBasicMaterial({color:0xeeeeee}));al.position.set(c[0],c[1]+.45,c[2]);LV.add(al);
+  IA.push({pu,pos:al.position.clone(),t:'[E] LISTEN TO THE ALTAR',fn(){if(pu.busy)return;pu.prog=0;pu.busy=1;pu.seq.forEach((k,j)=>setTimeout(()=>fl(pu,k),700+j*800));setTimeout(()=>pu.busy=0,700+n*800);say('REMEMBER THE ORDER')}});
+  [[-2.5,-2.5],[2.5,-2.5],[-2.5,2.5],[2.5,2.5]].forEach(([dx,dz],k)=>{const m=new THREE.Mesh(new THREE.BoxGeometry(.8,2,.8),new THREE.MeshBasicMaterial({color:dim(k)}));m.position.set(c[0]+dx,c[1]+1,c[2]+dz);LV.add(m);pu.pil.push(m);
+   IA.push({pu,pos:m.position.clone(),t:'[E] TOUCH',fn(){if(pu.busy)return;fl(pu,k);if(pu.seq[pu.prog]==k){if(++pu.prog==n){IA=IA.filter(o=>o.pu!=pu);solved++;reveal(g);hud()}}else{pu.prog=0;say('WRONG. IT HEARD YOU.');punish()}}})})});
+ tot=(D.V||[]).length+(D.Q||[]).length;spawn();hud();say('LEVEL '+(i+1)+': '+D.n,3500)}
+function nearIA(){let b=null,bd=3.3;IA.forEach(o=>{const d=o.pos.distanceTo(pl.p);if(d<bd+.6*0&&d<bd){bd=d;b=o}});return b}
+function die(){if(dead)return;dead=1;const f=$('flash');f.style.transition='none';f.style.background='#fff';f.style.opacity=1;beep(60,.8,.5,'sawtooth');beep(1900,.4,.25,'square');
+ setTimeout(()=>f.style.background='#900',90);setTimeout(()=>{spawn();f.style.transition='opacity 1s';f.style.opacity=0;dead=0},700);say('THE HOLLOW TAKES YOU',1800)}
+addEventListener('keydown',e=>{keys[e.code]=1;if(!playing)return;
+ if(e.code==='Space'&&pl.jumps<2){pl.v.y=9.5;pl.jumps++;pl.ground=0;beep(200,.12,.1,'square')}
+ if(e.code.startsWith('Shift')&&pl.dcd<=0){pl.dash=.18;pl.dcd=.9;beep(90,.2,.2,'sawtooth')}
+ if(e.code==='KeyE'){const o=nearIA();o&&o.fn()}});
+addEventListener('keyup',e=>keys[e.code]=0);
+addEventListener('mousemove',e=>{if(!playing)return;pl.yaw-=e.movementX*.0022;pl.pitch=Math.max(-1.5,Math.min(1.5,pl.pitch-e.movementY*.0022))});
+$('menu').onclick=()=>{initAudio();cv.requestPointerLock()};
+document.addEventListener('pointerlockchange',()=>{playing=document.pointerLockElement===cv&&!won;$('menu').style.display=playing||won?'none':'flex';$('go').textContent='PAUSED. CLICK TO RETURN'});
+load(0);
+let last=performance.now();
+function loop(now){requestAnimationFrame(loop);const dt=Math.min(.05,(now-last)/1000);last=now;t0+=dt;let fear=0;
+ if(playing&&!dead&&!ld){
+  const inx=(keys.KeyD?1:0)-(keys.KeyA?1:0),inz=(keys.KeyS?1:0)-(keys.KeyW?1:0);
+  fw.set(-Math.sin(pl.yaw),0,-Math.cos(pl.yaw));rt.set(Math.cos(pl.yaw),0,-Math.sin(pl.yaw));
+  tmp.set(0,0,0).addScaledVector(rt,inx).addScaledVector(fw,-inz);if(tmp.lengthSq())tmp.normalize();
+  const k=Math.min(1,(pl.ground?18:5)*dt);pl.v.x+=(tmp.x*9-pl.v.x)*k;pl.v.z+=(tmp.z*9-pl.v.z)*k;pl.dcd-=dt;
+  if(pl.dash>0){pl.dash-=dt;pl.v.x=fw.x*26;pl.v.z=fw.z*26;pl.v.y=0}else pl.v.y-=24*dt;
+  const pv=pl.p.y;pl.p.addScaledVector(pl.v,dt);pl.ground=0;
+  PL.forEach((e,i)=>{const q=e.p;if(e.ms[0].visible&&pl.v.y<=0&&Math.abs(pl.p.x-q[0])<q[3]/2+.35&&Math.abs(pl.p.z-q[2])<q[4]/2+.35&&pv>=q[1]-.15&&pl.p.y<=q[1]+.02){pl.p.y=q[1];pl.v.y=0;pl.ground=1;pl.jumps=0;if(q[5]&&cp<i){cp=i;say('CHECKPOINT',1200)}}});
+  if(pl.p.y<-12)die();
+  sig.forEach(s=>{if(s.visible&&s.position.distanceTo(pl.p)<2.2){s.visible=false;got++;beep(660,.4,.2,'triangle');hud();say('SIGIL '+got+'/'+D.need,1500)}});
+  if(pl.p.distanceTo(gate.position)<3.4){if(got<D.need)say('THE GATE NEEDS '+D.need+' SIGILS',1200);else if(solved<tot)say('THE GATE IS SEALED. SOMETHING IS UNSOLVED.',1500);
+   else if(lvl==3){won=1;document.exitPointerLock();$('menu').style.display='flex';$('menu').innerHTML='<h1>ESCAPED</h1><p>It is still behind you.</p><p onclick="location.reload()">CLICK TO DESCEND AGAIN</p>'}
+   else{ld=1;say('THE GATE OPENS...',900);setTimeout(()=>{load(lvl+1);ld=0},900)}}
+  // the Hollow
+  const eyeP=pl.p.clone();eyeP.y+=1.6;const to=E.position.clone().sub(eyeP),dist=to.length();to.normalize();
+  cam.getWorldDirection(tmp);const seen=tmp.dot(to)>.5&&dist<70;
+  if(seen){unseen=0;head.rotation.z=(Math.random()-.5)*.7;head.rotation.y=(Math.random()-.5)*.5}
+  else{unseen+=dt;head.rotation.z=0;head.rotation.y=0;E.position.addScaledVector(to,-(2.3+lvl*.55+got*.25)*dt);
+   if(unseen>8&&dist>20){E.position.copy(pl.p).addScaledVector(fw,-13);E.position.y+=2;unseen=0}}
+  E.lookAt(eyeP.x,E.position.y,eyeP.z);
+  if(dist<1.9)die();
+  fear=Math.max(0,1-dist/28);heart-=dt;
+  if(heart<=0&&fear>0){beep(55,.25,.35*fear+.05);setTimeout(()=>beep(48,.2,.25*fear),180);heart=1.1-fear*.7}
+  if(bass)bass.frequency.value=38-fear*10;if(nz)nz.gain.value=fear*fear*.22+(seen&&dist<30?.03:0);
+  lamp.intensity=(1.6-fear*.7)*(Math.random()<fear*.3?.05:1);
+  const o=nearIA();$('pr').textContent=o?o.t:'';$('dash').firstChild.style.width=Math.max(0,Math.min(1,1-pl.dcd/.9))*100+'%'}
+ $('fear').style.opacity=fear;
+ cam.position.set(pl.p.x+(Math.random()-.5)*fear*.12,pl.p.y+1.6+(Math.random()-.5)*fear*.12,pl.p.z);cam.rotation.set(pl.pitch,pl.yaw,0,'YXZ');lamp.position.copy(cam.position);
+ sig.forEach((s,i)=>{s.rotation.y=t0*2});gate.rotation.z=t0*.6;
+ sea.material.map.offset.y=t0*.01;sea.position.y=-14+Math.sin(t0)*.3;R.render(scene,cam)}
+requestAnimationFrame(loop);
+</script></body></html>
