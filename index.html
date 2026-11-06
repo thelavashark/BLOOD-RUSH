@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>BLOOD//RUSH</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#08070b;color:white;font-family:monospace;overflow:hidden}
+canvas{width:100vw;height:100vh;display:block;image-rendering:pixelated}
+#hud{position:absolute;top:15px;left:20px;font-size:20px;color:#ff344b;text-shadow:2px 2px black;pointer-events:none}
+#health{position:absolute;bottom:20px;left:20px;font-size:25px;color:#ff344b;pointer-events:none}
+#weapon{position:absolute;bottom:20px;right:20px;font-size:20px;pointer-events:none}
+#menu{position:absolute;inset:0;background:#09070bf2;display:flex;align-items:center;justify-content:center;text-align:center;z-index:5}
+#menu h1{font-size:65px;color:#ff263f;margin:0}
+#menu button{padding:16px 35px;background:#d21f36;color:white;border:0;font-size:20px;cursor:pointer;font-family:monospace}
+#menu p{color:#aaa;line-height:1.7}
+</style>
+</head>
+<body>
+
+<div id="menu">
+ <div>
+  <h1>BLOOD//RUSH</h1>
+  <p>KILL FAST. STAY ALIVE.<br><br>
+  WASD - MOVE<br>
+  MOUSE - AIM<br>
+  LEFT CLICK - SHOOT<br>
+  SPACE - DASH<br>
+  1 / 2 - SWITCH WEAPON</p>
+  <button onclick="start()">ENTER THE SLAUGHTER</button>
+ </div>
+</div>
+
+<div id="hud">WAVE <span id="wave">1</span><br>
+DEMONS <span id="left">0</span><br>
+STYLE <span id="style">NONE</span></div>
+<div id="health">♥ <span id="hp">100</span></div>
+<div id="weapon">REVOLVER</div>
+<canvas id="game"></canvas>
+
+<script>
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+canvas.width=640;
+canvas.height=400;
+
+const map=[
+"################",
+"#..............#",
+"#..............#",
+"#..##.....##...#",
+"#..............#",
+"#.....#........#",
+"#.....#........#",
+"#..............#",
+"#...#......#...#",
+"#...#......#...#",
+"#..............#",
+"#......##......#",
+"#..............#",
+"#..............#",
+"#..............#",
+"################"
+];
+
+let player={x:8,y:8,a:0,hp:100,dash:0,weapon:0};
+let enemies=[];
+let keys={};
+let bullets=[];
+let wave=1,kills=0,combo=0;
+let running=false;
+let ammo=6;
+let last=0;
+
+function start(){
+ document.getElementById("menu").style.display="none";
+ player={x:8,y:8,a:0,hp:100,dash:0,weapon:0};
+ wave=1;kills=0;combo=0;ammo=6;
+ enemies=[];
+ spawn();
+ running=true;
+ canvas.requestPointerLock();
+ requestAnimationFrame(loop);
+}
+
+function spawn(){
+ for(let i=0;i<3+wave*2;i++){
+  let x,y;
+  do{
+   x=2+Math.random()*12;
+   y=2+Math.random()*12;
+  }while(wall(x,y)||Math.hypot(x-player.x,y-player.y)<4);
+  enemies.push({x,y,hp:70,attack:0});
+ }
+ updateHUD();
+}
+
+function wall(x,y){
+ return !map[Math.floor(y)] ||
+ map[Math.floor(y)][Math.floor(x)]!=="." ;
+}
+
+document.addEventListener("keydown",e=>{
+ keys[e.code]=true;
+ if(e.code==="Space")player.dash=.25;
+ if(e.code==="Digit1"){player.weapon=0;ammo=6;}
+ if(e.code==="Digit2"){player.weapon=1;ammo=4;}
+ if(e.code==="KeyR")ammo=player.weapon===0?6:4;
+});
+
+document.addEventListener("keyup",e=>keys[e.code]=false);
+
+document.addEventListener("mousemove",e=>{
+ if(document.pointerLockElement===canvas)
+ player.a+=e.movementX*.003;
+});
+
+canvas.addEventListener("click",()=>{
+ if(!running)return;
+ if(!document.pointerLockElement)canvas.requestPointerLock();
+ else shoot();
+});
+
+function shoot(){
+ if(ammo<=0)return;
+ ammo--;
+ let range=player.weapon===0?14:9;
+ let angle=player.a;
+ let best=null,dist=range;
+
+ for(let e of enemies){
+  let dx=e.x-player.x,dy=e.y-player.y;
+  let d=Math.hypot(dx,dy);
+  let a=Math.atan2(dy,dx);
+  let diff=Math.atan2(Math.sin(a-angle),Math.cos(a-angle));
+  if(Math.abs(diff)<(player.weapon===0?.06:.19)&&d<dist){
+   best=e;dist=d;
+  }
+ }
+ if(best){
+  best.hp-=player.weapon===0?55:30;
+  if(best.hp<=0){
+   enemies=enemies.filter(e=>e!==best);
+   kills++;combo++;
+   player.hp=Math.min(100,player.hp+12);
+   document.getElementById("style").textContent=
+    combo>=5?"ULTRAKILL":combo>=3?"BRUTAL":"KILL";
+   updateHUD();
+  }
+ }
+}
+
+function updateHUD(){
+ document.getElementById("hp").textContent=Math.ceil(player.hp);
+ document.getElementById("left").textContent=enemies.length;
+ document.getElementById("wave").textContent=wave;
+ document.getElementById("weapon").textContent=
+ player.weapon===0?"REVOLVER ("+ammo+")":"SHOTGUN ("+ammo+")";
+}
+
+function update(dt){
+ let speed=player.dash>0?9:3;
+ player.dash=Math.max(0,player.dash-dt);
+
+ let f=(keys.KeyW?1:0)-(keys.KeyS?1:0);
+ let s=(keys.KeyD?1:0)-(keys.KeyA?1:0);
+ let dx=(Math.cos(player.a)*f-Math.sin(player.a)*s)*speed*dt;
+ let dy=(Math.sin(player.a)*f+Math.cos(player.a)*s)*speed*dt;
+
+ if(!wall(player.x+dx,player.y))player.x+=dx;
+ if(!wall(player.x,player.y+dy))player.y+=dy;
+
+ for(let e of enemies){
+  let dx=player.x-e.x,dy=player.y-e.y;
+  let d=Math.hypot(dx,dy);
+  if(d>.7){
+   let vx=dx/d*dt;
+   let vy=dy/d*dt;
+   if(!wall(e.x+vx,e.y))e.x+=vx;
+   if(!wall(e.x,e.y+vy))e.y+=vy;
+  }else{
+   e.attack-=dt;
+   if(e.attack<=0){
+    player.hp-=10;
+    e.attack=.8;
+    updateHUD();
+   }
+  }
+ }
+
+ if(player.hp<=0)gameOver();
+
+ if(enemies.length===0){
+  wave++;
+  player.hp=Math.min(100,player.hp+20);
+  spawn();
+ }
+ updateHUD();
+}
+
+function render(){
+ const w=canvas.width,h=canvas.height;
+ ctx.fillStyle="#160d18";
+ ctx.fillRect(0,0,w,h/2);
+ ctx.fillStyle="#21151d";
+ ctx.fillRect(0,h/2,w,h/2);
+
+ let depth=[];
+
+ for(let x=0;x<w;x++){
+  let angle=player.a+(x/w-.5)*1.15;
+  let d=0;
+  while(d<20&&!wall(
+   player.x+Math.cos(angle)*d,
+   player.y+Math.sin(angle)*d
+  ))d+=.04;
+
+  let corrected=d*Math.cos(angle-player.a);
+  depth[x]=corrected;
+
+  let height=Math.min(h,h/(corrected+.01)*.8);
+  let shade=Math.max(20,150-corrected*9);
+  ctx.fillStyle=`rgb(shade,{shade*.25},${shade*.35})`;
+  ctx.fillRect(x,h/2-height/2,1,height);
+ }
+
+ let sprites=enemies.map(e=>{
+  let dx=e.x-player.x,dy=e.y-player.y;
+  let d=Math.hypot(dx,dy);
+  let a=Math.atan2(dy,dx)-player.a;
+  a=Math.atan2(Math.sin(a),Math.cos(a));
+  return {e,d,a};
+ }).filter(s=>Math.abs(s.a)<.8).sort((a,b)=>b.d-a.d);
+
+ for(let s of sprites){
+  let sx=(.5+s.a/1.15)*w;
+  let size=Math.min(h,h/(s.d+.01)*.65);
+  let top=h/2-size/2;
+  for(let x=Math.max(0,Math.floor(sx-size*.25));x<Math.min(w,sx+size*.25);x++){
+   if(s.d<depth[x]){
+    ctx.fillStyle="#d52b49";
+    ctx.fillRect(x,top,size*.5/Math.max(1,size),size);
+   }
+  }
+  ctx.fillStyle="#fff";
+  ctx.fillRect(sx-size*.12,top+size*.3,5,4);
+  ctx.fillRect(sx+size*.08,top+size*.3,5,4);
+ }
+
+ // Weapon
+ ctx.fillStyle="#333039";
+ ctx.fillRect(w*.44,h*.83,w*.12,h*.17);
+ ctx.fillStyle="#a7283e";
+ ctx.fillRect(w*.48,h*.79,w*.04,h*.1);
+
+ // Crosshair
+ ctx.strokeStyle="#fff";
+ ctx.beginPath();
+ ctx.moveTo(w/2-8,h/2);ctx.lineTo(w/2+8,h/2);
+ ctx.moveTo(w/2,h/2-8);ctx.lineTo(w/2,h/2+8);
+ ctx.stroke();
+}
+
+function gameOver(){
+ running=false;
+ document.exitPointerLock();
+ document.getElementById("menu").style.display="flex";
+ document.querySelector("#menu div").innerHTML=
+ `<h1>YOU DIED</h1>
+ <p>WAVE ${wave}<br>KILLS ${kills}</p>
+ <button onclick="start()">TRY AGAIN</button>`;
+}
+
+function loop(t){
+ if(!running)return;
+ let dt=Math.min((t-last)/1000,.04)||.016;
+ last=t;
+ update(dt);
+ render();
+ requestAnimationFrame(loop);
+}
+
+</script>
+</body>
+</html>
